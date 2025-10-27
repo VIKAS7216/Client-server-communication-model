@@ -1,0 +1,82 @@
+import socket
+import threading
+import sys
+
+
+HOST = '127.0.0.1'
+PORT = 65432
+BUFFER_SIZE = 1024
+
+def receive_messages(client_socket):
+    """Handles receiving messages from the server."""
+    while True:
+        try:
+            
+            message_bytes = client_socket.recv(BUFFER_SIZE)
+            if not message_bytes:
+
+                print("\n[SERVER DISCONNECTED. Press Enter to exit.]")
+                client_socket.close()
+                sys.exit()
+                break
+            print(f"\n{message_bytes.decode('utf-8')}")
+            print(f"You: ", end="", flush=True) 
+            
+        except ConnectionResetError:
+            print("\n[CONNECTION LOST. Server closed the connection.]")
+            break
+        except Exception:
+            print("\n[CONNECTION ERROR.]")
+            break
+
+
+def send_messages(client_socket):
+    """Handles user input and sending messages to the server."""
+    while True:
+        try:
+            message = input("You: ")
+            if message.lower() == 'quit':
+                break
+                
+            client_socket.sendall(message.encode('utf-8'))
+            
+        except Exception:
+            break
+    
+    client_socket.close()
+    print("[*] Disconnecting from server...")
+
+
+
+if __name__ == "__main__":
+    
+    
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    try:
+        
+        client.connect((HOST, PORT))
+        print(f"[*] Successfully connected to the Server at {HOST}:{PORT}\n")
+        
+        
+        
+        
+        receive_thread = threading.Thread(target=receive_messages, args=(client,))
+        receive_thread.daemon = True 
+        receive_thread.start()
+        
+        
+        send_thread = threading.Thread(target=send_messages, args=(client,))
+        send_thread.start()
+        
+        send_thread.join()
+        
+    except ConnectionRefusedError:
+        print(f"[ERROR] Connection refused. Check if the server is running or not {HOST}:{PORT}")
+    except Exception as e:
+        print(f"[ERROR] An unexpected error occurred: {e}")
+        
+    finally:
+        if client:
+            client.close()
+        print("[*] Client application exited.")
