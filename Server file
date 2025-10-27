@@ -1,0 +1,140 @@
+import socket
+import threading
+
+
+HOST = '127.0.0.1'
+PORT = 65432
+BUFFER_SIZE = 1024
+
+list_of_clients = []
+client_count = 0
+
+def broadcast(message):
+    
+    print(f"[*] SERVER BROADCAST: {message.decode('utf-8').strip()}")
+    
+    clients_to_remove = []
+    for client in list_of_clients:
+        try:
+            client.send(message)
+        except Exception:
+            client.close()
+            clients_to_remove.append(client)
+    
+    
+    for client in clients_to_remove:
+        if client in list_of_clients:
+            list_of_clients.remove(client)
+
+
+def handle_client(conn, addr):
+    """
+    """
+    global client_count
+    
+    print(f"--- Client {addr[1]} connected. ---")
+    
+    # Connection ke turant baad Client ko batao ki Server ab type kar sakta hai
+    welcome_message = "Server: Connection successful. Server is ready to receive and send messages.".encode('utf-8')
+    conn.sendall(welcome_message)
+    
+    while True:
+        try:
+            message_bytes = conn.recv(BUFFER_SIZE)
+            
+            if message_bytes:
+                received_message = message_bytes.decode('utf-8')
+                
+                print(f"[{addr[1]}]: {received_message}") 
+
+                
+            else:
+                
+                break
+        except Exception:
+            break
+
+    print(f"[-] Client {addr[1]} disconnected.")
+    if conn in list_of_clients:
+        list_of_clients.remove(conn)
+    client_count -= 1
+
+    print(f"[*] Current active clients: {client_count}")
+    conn.close()
+
+
+def write_to_server():
+    """
+    Naya thread jo Server Operator se input lekar sabhi clients ko bhejta hai.
+    """
+    while True:
+        try:
+            message = input("Server Admin: ") 
+            
+            if message.lower() == 'quit':
+                break
+            
+            if not message.strip():
+                continue
+            
+            full_message = f"[SERVER ADMIN]: {message}".encode('utf-8')
+            broadcast(full_message)
+
+        except EOFError:
+            break
+        except Exception:
+            break
+
+def accept_connections(server_socket):
+    """
+    Main loop to accept new incoming connections and start threads.
+    """
+    global client_count
+    print(f"[*] Simple Server with Input listening on {HOST}:{PORT}")
+    
+    server_input_thread = threading.Thread(target=write_to_server)
+    server_input_thread.daemon = True 
+    server_input_thread.start()
+    
+
+    while True:
+        try:
+            conn, addr = server_socket.accept() 
+            
+
+            list_of_clients.append(conn)
+            client_count += 1
+            
+            print(f"\n[*] New Client connected from {addr}. Total clients: {client_count}")
+            print("Server Admin: ", end="", flush=True)
+
+            thread = threading.Thread(target=handle_client, args=(conn, addr))
+            thread.daemon = True 
+            thread.start()
+
+        except KeyboardInterrupt:
+            print("\n[!!!] Server shutting down...")
+            break
+        except Exception as e:
+            print(f"[!!!] An error occurred in accepting connections: {e}")
+            continue
+
+
+if __name__ == "__main__":
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) 
+    
+    try:
+        server.bind((HOST, PORT))
+        server.listen()
+        
+        accept_connections(server)
+        
+    except socket.error as e:
+        print(f"[ERROR] Could not start server: {e}")
+        
+    finally:
+        for client in list_of_clients:
+            client.close()
+        server.close()
+        print("[*] Server gracefully closed.")
